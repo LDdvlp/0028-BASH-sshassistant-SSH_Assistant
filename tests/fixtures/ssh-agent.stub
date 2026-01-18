@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# simulate: ssh-agent -s
+cat <<'EOF'
+SSH_AUTH_SOCK=/tmp/ssh_stub.sock; export SSH_AUTH_SOCK;
+SSH_AGENT_PID=12345; export SSH_AGENT_PID;
+echo Agent pid 12345;
+EOF

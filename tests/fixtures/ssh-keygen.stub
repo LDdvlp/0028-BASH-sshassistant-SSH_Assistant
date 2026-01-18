@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Minimal stub: create key files as ssh-keygen would.
+# expects: ... -f <path> ...
+out=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -f) shift; out="$1" ;;
+  esac
+  shift || true
+done
+
+if [[ -z "${out}" ]]; then
+  echo "stub ssh-keygen: missing -f" >&2
+  exit 2
+fi
+
+mkdir -p "$(dirname -- "${out}")"
+echo "PRIVATE_KEY_STUB" > "${out}"
+echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAASTUB ${out}" > "${out}.pub"
+exit 0

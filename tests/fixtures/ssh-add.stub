@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# accept any key path, succeed
+exit 0
