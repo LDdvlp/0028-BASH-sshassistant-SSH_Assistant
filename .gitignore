@@ -1,0 +1,4 @@
+# generated symlinks for tests
+tests/fixtures/ssh-add
+tests/fixtures/ssh-agent
+tests/fixtures/ssh-keygen

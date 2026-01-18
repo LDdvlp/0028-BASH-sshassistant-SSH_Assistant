@@ -2,12 +2,31 @@
 set -euo pipefail
 
 ssha::banner() {
-  echo "=============================================="
-  echo " SSH Assistant (v0.1.0-dev)"
-  echo " Plateforme: ${SSHA_PLATFORM:-unknown}"
-  echo "=============================================="
+  local root_dir
+
+  # Clear screen only if interactive TTY
+  if [[ -t 1 ]]; then
+    clear
+  fi
+
+  root_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+
+  if [[ -f "${root_dir}/assets/banner.txt" ]]; then
+    # Banner in orange (option 3)
+    ssha::print_orange_file "${root_dir}/assets/banner.txt"
+  else
+    echo "SSH Assistant"
+  fi
+
+  echo
+  ssha::c_green
+  printf ' Plateforme: %s\n' "${SSHA_PLATFORM:-unknown}"
+  printf '==============================================\n'
+  ssha::c_reset
   echo
 }
+
+
 
 ssha::detect_platform() {
   # minimal: gitbash/msys/cygwin/linux
@@ -27,14 +46,58 @@ ssha::prompt() {
   local label="$1"
   local default="${2:-}"
   local out
+
+  local can_color=0
+  if declare -F ssha::colors_enabled >/dev/null 2>&1 \
+     && [[ -t 0 ]] && [[ -t 1 ]] \
+     && ssha::colors_enabled; then
+    can_color=1
+  fi
+
+  local is_choice=0
+  [[ "${label}" =~ ^[[:space:]]*Choix\b ]] && is_choice=1
+
   if [[ -n "${default}" ]]; then
-    read -r -p "${label} [${default}]: " out
-    echo "${out:-$default}"
+    if [[ "${can_color}" -eq 1 ]]; then
+      if [[ "${is_choice}" -eq 1 ]]; then
+        ssha::c_yellow
+      else
+        ssha::c_blue
+      fi
+
+      # IMPORTANT: label + default + input all in SAME color for Choix
+      printf '%s [%s]: ' "${label}" "${default}"
+
+      # keep yellow for input
+      ssha::c_yellow
+      IFS= read -r out
+      ssha::c_reset
+    else
+      read -r -p "${label} [${default}]: " out
+    fi
+    printf '%s\n' "${out:-$default}"
   else
-    read -r -p "${label}: " out
-    echo "${out}"
+    if [[ "${can_color}" -eq 1 ]]; then
+      if [[ "${is_choice}" -eq 1 ]]; then
+        ssha::c_yellow
+      else
+        ssha::c_blue
+      fi
+
+      printf '%s: ' "${label}"
+      ssha::c_yellow
+      IFS= read -r out
+      ssha::c_reset
+    else
+      read -r -p "${label}: " out
+    fi
+    printf '%s\n' "${out}"
   fi
 }
+
+
+
+
 
 ssha::choose_encoding() {
   # IMPORTANT:
@@ -196,11 +259,16 @@ ssha::option_create_key_and_config() {
 }
 
 ssha::menu() {
+  ssha::c_blue
   echo "1) Création de la paire de clé + config host"
   echo "2) Agent: status / start / ensure"
+  echo "3) Keys: list ~/.ssh"
   echo "0) Quit"
+  ssha::c_reset
   echo
 }
+
+
 
 
 ssha::main() {
@@ -218,8 +286,9 @@ ssha::main() {
     case "${choice}" in
       1) ssha::option_create_key_and_config ;;
       2) ssha::option_agent_menu ;;
+      3) ssha::option_keys_list ;;
       0) exit 0 ;;
-      *) echo "[WARN] Choix invalide." ;;
+      *) ssha::log_warn "Choix invalide." ;;
     esac
     echo
     read -r -p "Appuie sur Entrée pour revenir au menu..." _
@@ -243,4 +312,22 @@ ssha::option_agent_menu() {
     0) return 0 ;;
     *) echo "[WARN] Choix invalide." ;;
   esac
+}
+
+ssha::option_keys_list() {
+  local dir="${SSHA_SSH_DIR:-$HOME/.ssh}"
+  if [[ ! -d "${dir}" ]]; then
+    ssha::log_err "SSH directory not found: ${dir}"
+    return 1
+  fi
+
+  ssha::log_ok "Listing keys in ${dir}"
+  echo
+
+  # Show private keys (best-effort)
+  find "${dir}" -maxdepth 1 -type f \
+    ! -name "*.pub" ! -name "known_hosts" ! -name "config" ! -name "authorized_keys" \
+    -printf "%f\n" 2>/dev/null | sort || true
+
+  echo
 }

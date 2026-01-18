@@ -7,6 +7,9 @@ ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 # shellcheck source=../lib/ssha_core.sh
 source "${ROOT_DIR}/lib/ssha_core.sh"
 
+# shellcheck source=../lib/ssha_colors.sh
+source "${ROOT_DIR}/lib/ssha_colors.sh"
+
 # shellcheck source=../lib/ssha_agent.sh
 source "${ROOT_DIR}/lib/ssha_agent.sh"
 

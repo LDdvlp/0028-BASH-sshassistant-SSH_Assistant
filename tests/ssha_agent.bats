@@ -27,12 +27,14 @@ teardown() {
 
 @test "agent_start sets SSH_AUTH_SOCK (via stub)" {
   unset SSH_AUTH_SOCK || true
-  run ssha::agent_start
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"ssh-agent started"* ]]
-  # Note: env var exists in current process after eval in function
+
+  # call directly (NOT via `run`) so eval/export happens in this shell
+  ssha::agent_start >/dev/null
+  [ "$?" -eq 0 ]
+
   [[ -n "${SSH_AUTH_SOCK:-}" ]]
 }
+
 
 @test "agent_add_key fails if key does not exist" {
   run ssha::agent_add_key "/nope/key"
