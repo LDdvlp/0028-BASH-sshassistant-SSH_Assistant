@@ -37,21 +37,29 @@ ssha::prompt() {
 }
 
 ssha::choose_encoding() {
-  echo
-  echo "Encodage / type de clé :"
-  echo "1) ed25519 (recommandé)"
-  echo "2) rsa (fallback, 4096 bits)"
-  echo "3) ecdsa (P-256)"
-  echo
+  # IMPORTANT:
+  # - tout ce qui est "UI/menu" va sur STDERR
+  # - seule la valeur finale ("ed25519", "rsa", ...) va sur STDOUT
+  {
+    echo
+    echo "Encodage / type de clé :"
+    echo "1) ed25519 (recommandé)"
+    echo "2) rsa (fallback, 4096 bits)"
+    echo "3) ecdsa (P-256)"
+    echo
+  } >&2
+
   local choice
   choice="$(ssha::prompt "Choix" "1")"
+
   case "${choice}" in
-    1) echo "ed25519" ;;
-    2) echo "rsa" ;;
-    3) echo "ecdsa" ;;
-    *) echo "ed25519" ;;
+    1) printf '%s\n' "ed25519" ;;
+    2) printf '%s\n' "rsa" ;;
+    3) printf '%s\n' "ecdsa" ;;
+    *) printf '%s\n' "ed25519" ;;
   esac
 }
+
 
 ssha::ensure_ssh_dir() {
   local dir="${1}"
@@ -162,7 +170,10 @@ ssha::option_create_key_and_config() {
   ssha::ensure_ssh_dir "${SSHA_SSH_DIR}"
 
   if [[ -e "${keypath}" || -e "${pubpath}" ]]; then
-    echo "[ERROR] La clé existe déjà: ${keypath} (ou .pub). Renomme la clé ou supprime l'existante."
+    echo "[ERROR] La clé existe déjà:"
+    echo "        - ${keypath}"
+    echo "        - ${pubpath}"
+    echo "        Renomme la clé ou supprime l'existante."
     return 1
   fi
 
