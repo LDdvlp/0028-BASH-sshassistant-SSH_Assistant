@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-set -euo pipefail
+# IMPORTANT: pas de "set -e" ici non plus.
+set -u
+set -o pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 
-# shellcheck source=../lib/ssha_core.sh
-source "${ROOT_DIR}/lib/ssha_core.sh"
-
-# shellcheck source=../lib/ssha_colors.sh
+# shellcheck disable=SC1091
 source "${ROOT_DIR}/lib/ssha_colors.sh"
+
+# shellcheck disable=SC1091
+source "${ROOT_DIR}/lib/ssha_core.sh"
 
 ssha::main "$@"

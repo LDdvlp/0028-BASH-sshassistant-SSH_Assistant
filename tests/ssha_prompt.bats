@@ -1,13 +1,11 @@
 #!/usr/bin/env bats
 
-@test "prompt formats default prompt as: label [default]:" {
-  # We can't test colors or interactive input in CI,
-  # so we assert the formatting logic in source code.
-  run grep -F "printf '%s [%s]: '" lib/ssha_core.sh
+@test "prompt formats default prompt with bracketed default" {
+  run grep -F "printf '%s [' \"\${label}\"" lib/ssha_core.sh
   [ "$status" -eq 0 ]
 }
 
-@test "main menu uses ssha::prompt for Choix" {
-  run grep -F 'ssha::prompt "Choix"' lib/ssha_core.sh
+@test "main menu uses prompt_required_choice for Choix" {
+  run grep -F 'choice="$(ssha::prompt_required_choice "Choix")"' lib/ssha_core.sh
   [ "$status" -eq 0 ]
 }

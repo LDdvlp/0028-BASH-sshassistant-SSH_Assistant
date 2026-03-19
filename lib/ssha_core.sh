@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-set -euo pipefail
+# IMPORTANT: pas de "set -e" (le programme ne doit jamais quitter sur erreur)
+set -u
+set -o pipefail
 
 # SSH Assistant - ssha_core.sh (refactor: regroupé par thèmes + commentaires)
 # -----------------------------------------------------------------------------
@@ -20,11 +22,11 @@ ssha::detect_platform() {
   local u
   u="$(uname -s 2>/dev/null || true)"
   case "${u}" in
-    MINGW*|MSYS*) SSHA_PLATFORM="gitbash" ;;
-    CYGWIN*)      SSHA_PLATFORM="cygwin" ;;
-    Linux*)       SSHA_PLATFORM="linux" ;;
-    Darwin*)      SSHA_PLATFORM="mac" ;;
-    *)            SSHA_PLATFORM="unknown" ;;
+    MINGW*|MSYS*) SSHA_PLATFORM="GitBash" ;;
+    CYGWIN*)      SSHA_PLATFORM="Cygwin" ;;
+    Linux*)       SSHA_PLATFORM="Linux" ;;
+    Darwin*)      SSHA_PLATFORM="macOS" ;;
+    *)            SSHA_PLATFORM="Unknown" ;;
   esac
   export SSHA_PLATFORM
 }
@@ -60,6 +62,8 @@ ssha::history_show() {
     return 0
   fi
   tail -n 200 "${f}" >&2
+
+  ssha::pause
 }
 
 
@@ -100,6 +104,52 @@ ssha::dry_run_toggle() {
   fi
 }
 
+# --- ssha::_banner_green_block
+# Bannière verte standardisée (64 colonnes)
+
+ssha::_banner_green_block() {
+  local title="$1"
+  local subtitle="$2"
+  local host="${3:-}"
+
+  if ssha::colors_enabled; then ssha::c_green >&2; fi
+
+  printf '████████████████████████████████████████████████████████████████\n' >&2
+  printf '  %-60s  \n' "${title}" >&2
+  printf '  %-60s  \n' "${subtitle}" >&2
+
+  if [[ -n "${host}" ]]; then
+    printf '  Host: %-53s  \n' "${host}" >&2
+  fi
+
+  printf '████████████████████████████████████████████████████████████████\n\n' >&2
+
+  if ssha::colors_enabled; then ssha::c_reset >&2; fi
+}
+
+# --- ssha::_banner_red_block
+# Bannière rouge standardisée (64 colonnes)
+
+ssha::_banner_red_block() {
+  local title="$1"
+  local subtitle="$2"
+  local host="${3:-}"
+
+  if ssha::colors_enabled; then ssha::c_red >&2; fi
+
+  printf '████████████████████████████████████████████████████████████████\n' >&2
+  printf '  %-60s  \n' "${title}" >&2
+  printf '  %-60s  \n' "${subtitle}" >&2
+
+  if [[ -n "${host}" ]]; then
+    printf '  Host: %-53s  \n' "${host}" >&2
+  fi
+
+  printf '████████████████████████████████████████████████████████████████\n\n' >&2
+
+  if ssha::colors_enabled; then ssha::c_reset >&2; fi
+}
+
 
 # --- ssha::banner
 # Affiche la bannière ASCII + plateforme, avec couleurs.
@@ -132,25 +182,34 @@ ssha::banner() {
 
 
 # --- ssha::menu
-# Affiche le menu principal (inclut statut DRY-RUN).
+# Affiche le menu principal
+
 
 ssha::menu() {
-  ssha::c_blue
-  echo "1) Création de la paire de clé + config host"
-  echo "2) Test de connexion SSH (depuis config)"
-  echo "4) Providers: GitHub / GitLab / Bitbucket (guide)"
-  echo "5) Providers: status / test"
-  echo "6) Proc: shells en cours"
-  echo "7) SSH: afficher le dossier ~/.ssh"
-  echo "8) SSH: effacer le dossier ~/.ssh (DANGEREUX)"
-  echo "9) SSH: sauvegarder le dossier ~/.ssh (volontaire)"
-  local dr="OFF"
-  ssha::dry_run_is_on && dr="ON"
-  echo "10) DRY-RUN: ${dr} (toggle)"
-  echo "11) Historique: afficher"
-  echo "0) Quit"
-  ssha::c_reset
-  echo
+  ssha::c_blue >&2
+
+  echo "-----------------------------------------------" >&2
+  echo "* CRÉATION PAIRE DE CLÉS (PUBLIQUE ET PRIVÉE) *" >&2
+  echo "-----------------------------------------------" >&2
+  echo "1) Création manuelle de la paire de clé et config host" >&2
+  echo "2) Création automatique à partir de la liste des hôtes" >&2
+
+  echo "----------------------" >&2
+  echo "* TEST CONNEXION SSH *" >&2
+  echo "----------------------" >&2
+  echo "3) Test de connexion SSH (depuis config)" >&2
+
+  echo "---------------" >&2
+  echo "* DOSSIER SSH *" >&2
+  echo "---------------" >&2
+  echo "4) Afficher le dossier ~/.ssh" >&2
+  echo "5) Sauvegarder le dossier ~/.ssh (volontaire)" >&2
+  echo "6) Effacer le dossier ~/.ssh (DANGEREUX)" >&2
+  echo "-------" >&2
+  echo "0) Quit" >&2
+
+  ssha::c_reset >&2
+  echo >&2
 }
 
 
@@ -354,7 +413,11 @@ ssha::prompt() {
   if [[ -n "${default}" ]]; then
     _ssha__set_label_color
     # IMPORTANT: prompt printed to STDERR so it is visible even inside $(...)
-    printf '%s [%s]: ' "${label}" "${default}" >&2
+    printf '%s [' "${label}" >&2
+    ssha::c_yellow >&2
+    printf '%s' "${default}" >&2
+    ssha::c_reset >&2
+    printf ']: ' >&2
     _ssha__set_input_color
     IFS= read -r out
     _ssha__reset_color
@@ -384,13 +447,11 @@ ssha::prompt_required() {
   while true; do
     value="$(ssha::prompt "${label}" "${default}")"
 
-    # "pas une chaîne de caractères" en Bash = on interprète comme "vide / rien saisi"
     if [[ -n "${value}" ]]; then
       printf '%s\n' "${value}"
       return 0
     fi
 
-    # message d'erreur juste en dessous
     ssha::blink_error_red
   done
 }
@@ -411,13 +472,11 @@ ssha::prompt_required_text() {
     value="${value#"${value%%[![:space:]]*}"}"
     value="${value%"${value##*[![:space:]]}"}"
 
-    # vide -> erreur
     if [[ -z "${value}" ]]; then
       ssha::blink_error_red
       continue
     fi
 
-    # purement numérique -> erreur (ton cas)
     if [[ "${value}" =~ ^[0-9]+$ ]]; then
       ssha::blink_error_red
       continue
@@ -440,23 +499,19 @@ ssha::prompt_required_port() {
   while true; do
     value="$(ssha::prompt "${label}" "${default}")"
 
-    # trim espaces
     value="${value#"${value%%[![:space:]]*}"}"
     value="${value%"${value##*[![:space:]]}"}"
 
-    # vide -> erreur
     if [[ -z "${value}" ]]; then
       ssha::blink_error_red
       continue
     fi
 
-    # non numérique -> erreur
     if [[ ! "${value}" =~ ^[0-9]+$ ]]; then
       ssha::blink_error_red
       continue
     fi
 
-    # hors plage -> erreur
     if (( value < 1 || value > 65535 )); then
       ssha::blink_error_red
       continue
@@ -476,20 +531,16 @@ ssha::prompt_required_choice() {
   local value=""
 
   while true; do
-    # ⚠️ pas de valeur par défaut
     value="$(ssha::prompt "${label}" "")"
 
-    # trim espaces
     value="${value#"${value%%[![:space:]]*}"}"
     value="${value%"${value##*[![:space:]]}"}"
 
-    # vide -> erreur
     if [[ -z "${value}" ]]; then
       ssha::blink_error_red
       continue
     fi
 
-    # non numérique -> erreur
     if [[ ! "${value}" =~ ^[0-9]+$ ]]; then
       ssha::blink_error_red
       continue
@@ -531,7 +582,6 @@ ssha::prompt_wipe_confirm() {
 # Menu choix type de clé (ed25519/rsa/ecdsa).
 
 ssha::choose_encoding() {
-  # Menu sur STDERR (pour fonctionner avec enc="$(...)")
   if [[ "${SSHA_PROMPT_FORCE_YELLOW:-0}" == "1" ]] && ssha::colors_enabled; then
     ssha::c_yellow >&2
   elif ssha::colors_enabled; then
@@ -588,10 +638,9 @@ ssha::config_path() {
 # Calcule les chemins clé privée/publique selon enc+nom.
 
 ssha::key_paths() {
-  local enc="$1"
-  local name="$2"
-  local base="${SSHA_SSH_DIR}/${enc}_${name}"
-  echo "${base}"$'\n'"${base}.pub"
+  local name="$1"
+  local base="${SSHA_SSH_DIR}/${name}"
+  printf '%s\n%s\n' "${base}" "${base}.pub"
 }
 
 
@@ -624,18 +673,14 @@ ssha::run_ssh_keygen() {
 # Supprime un bloc 'Host <alias>' du fichier config.
 
 ssha::remove_host_block() {
-  # Remove an existing Host block for alias from config (simple, robust enough for v0.1)
   local cfg="$1"
   local alias="$2"
 
   [[ -f "${cfg}" ]] || return 0
 
-  # awk state machine:
-  # when we hit "Host <alias>" -> skip until next "Host " line
   awk -v a="${alias}" '
     BEGIN{skip=0}
     /^[[:space:]]*Host[[:space:]]+/{
-      # new block begins
       if ($2==a) {skip=1; next}
       else {skip=0}
     }
@@ -696,6 +741,33 @@ ssha::copy_to_clipboard() {
 }
 
 
+
+# --- ssha::normalize_keyname
+# Convention: alias_user (ex: github-lddvlp_git) ou planethoster-ldbug-com_dwmkyvke
+# - tout en minuscules
+# - remplace @ par _at_
+# - remplace espaces et caractères non sûrs par _
+# - compacte les ___
+# NB: on ne met pas l'encodage dans le nom : le filename = keyname (alias_user)
+
+ssha::normalize_keyname() {
+  local alias="${1:-}"
+  local user="${2:-}"
+
+  # Si un champ manque, on renvoie vide (appelant gère le fallback)
+  [[ -n "${alias}" && -n "${user}" ]] || { printf '%s\n' ""; return 0; }
+
+  local raw="${alias}_${user}"
+
+  raw="$(printf '%s' "${raw}" | tr '[:upper:]' '[:lower:]')"
+  raw="${raw//@/_at_}"
+
+  raw="$(printf '%s' "${raw}" | sed -E 's/[^a-z0-9]+/_/g')"
+  raw="$(printf '%s' "${raw}" | sed -E 's/_+/_/g; s/^_+//; s/_+$//')"
+
+  printf '%s\n' "${raw}"
+}
+
 # --- ssha::option_create_key_and_config
 # Option 1: crée une paire de clés + écrit le Host dans config + copie la pubkey.
 
@@ -703,22 +775,24 @@ ssha::option_create_key_and_config() {
 
   ssha::screen_title "Création de la paire de clé et génération du fichier config"
 
-  local host_alias hostname username port enc keyname comment
+  local host_alias hostname username port enc keyname comment default_keyname
   local keypath pubpath cfg
   local -a paths
   local SKIP_KEYGEN=0
 
-
   host_alias="$(ssha::prompt_required_text "Nom de l'hote (alias dans ~/.ssh/config) ex: planethoster")"
   hostname="$(ssha::prompt_required_text "Adresse du serveur (HostName) ex: node266-eu.n0c.com")"
-  username="$(ssha::prompt_required_text "Nom utilisateur SSH (User) ex: dwmkyvke")"    
+  username="$(ssha::prompt_required_text "Nom utilisateur SSH (User) ex: dwmkyvke")"
   port="$(ssha::prompt_required_port "Port SSH (Port)" "22")"
 
-  enc="$(ssha::choose_encoding)"
-  keyname="$(ssha::prompt_required_text "Nom de la clé (ex: planethoster)")"
-  comment="$(ssha::prompt "Commentaire (ssh-keygen -C)" "${username}@${host_alias}")"
+  default_keyname="$(ssha::normalize_keyname "${host_alias}" "${username}")"
+  [[ -n "${default_keyname}" ]] || default_keyname="${host_alias}"
 
-  mapfile -t paths < <(ssha::key_paths "${enc}" "${keyname}")
+  enc="$(ssha::choose_encoding)"
+  keyname="$(ssha::prompt_required_text "Nom de la clé " "${default_keyname}")"
+  comment="${keyname}"
+
+  mapfile -t paths < <(ssha::key_paths "${keyname}")
   keypath="${paths[0]}"
   pubpath="${paths[1]}"
 
@@ -746,13 +820,11 @@ ssha::option_create_key_and_config() {
         ;;
       2)
         ssha::log_ok "Réutilisation de la clé existante (pas de régénération)."
-        # on saute ssh-keygen plus bas
         SKIP_KEYGEN=1
         ;;
       3)
         ssha::log_warn "Écrasement demandé: backup puis régénération."
         ssha::backup_existing_keypair "${keypath}" "${pubpath}"
-        # on continue, ssh-keygen va régénérer
         ;;
       *)
         ssha::log_warn "Choix invalide. Annulé."
@@ -761,7 +833,6 @@ ssha::option_create_key_and_config() {
     esac
   fi
 
-
   if [[ "${SKIP_KEYGEN}" != "1" ]]; then
     echo
     ssha::log_ok "Génération de la clé: ${enc} -> ${keypath}"
@@ -769,7 +840,6 @@ ssha::option_create_key_and_config() {
   else
     ssha::log_ok "Keygen ignoré : utilisation de la clé existante."
   fi
-
 
   cfg="$(ssha::config_path)"
   touch "${cfg}"
@@ -784,14 +854,13 @@ ssha::option_create_key_and_config() {
   if [[ -f "${pubpath}" ]]; then
     local pubkey
     pubkey="$(cat "${pubpath}")"
-  if ssha::copy_to_clipboard "$(cat "${pubpath}")"; then
-    ssha::print_pubkey_copied_banner
-  else
-    ssha::screen_notice_red "COPIE AUTOMATIQUE IMPOSSIBLE – COPIEZ LA CLÉ CI-DESSUS ET COLLEZ-LA CHEZ VOTRE HÔTE"
+    if ssha::copy_to_clipboard "${pubkey}"; then
+      ssha::banner_pubkey_copied_red
+    else
+      ssha::banner_pubkey_copy_failed_red
+    fi
   fi
 
-  fi
-  
   echo >&2
   local do_test
   do_test="$(ssha::prompt "Tester maintenant la connexion SSH ?" "o")"
@@ -801,9 +870,6 @@ ssha::option_create_key_and_config() {
       ;;
     *) : ;;
   esac
-
-
-  
 }
 
 ssha::backup_existing_keypair() {
@@ -844,7 +910,6 @@ ssha::providers_list() {
   conf="$(ssha::providers_conf_path)"
   [[ -f "${conf}" ]] || return 1
 
-  # Print: id|label|hostname|user|port|keyname
   grep -vE '^[[:space:]]*#' "${conf}" | grep -vE '^[[:space:]]*$' || true
 }
 
@@ -853,36 +918,81 @@ ssha::providers_list() {
 # Option 3: menu guidé pour générer config/clé via providers.conf.
 
 ssha::providers_menu() {
-  local -a ids labels lines
-  local i=0 line id label hostname user port keyname
+  
+  ssha::screen_title "Création automatique des clés"
+
+  local -a ids lines
+  local i=0 line
 
   while IFS= read -r line; do
     ids[i]="$(printf '%s' "${line}" | cut -d'|' -f1)"
-    labels[i]="$(printf '%s' "${line}" | cut -d'|' -f2)"
     lines[i]="${line}"
     i=$((i+1))
   done < <(ssha::providers_list)
+
+  local count="${#ids[@]}"
 
   if [[ "${#ids[@]}" -eq 0 ]]; then
     ssha::log_err "Aucun provider dans assets/providers.conf"
     return 1
   fi
 
-  echo
-  ssha::c_blue
-  echo "Providers (guide):"
-  for ((i=0; i<${#ids[@]}; i++)); do
-    printf '%d) %s\n' "$((i+1))" "${labels[i]}"
-  done
-  printf '%d) %s\n' "$(( ${#ids[@]} + 1 ))" "Tout (generer pour tous)"
-  echo "0) Retour"
-  ssha::c_reset
-  echo
+local count="${#ids[@]}"
+
+echo >&2
+ssha::c_blue >&2
+printf "Hôtes enregistrés (%d) :\n" "${count}" >&2
+ssha::c_reset >&2
+
+# En-tête tableau
+ssha::c_blue >&2
+
+# Largeurs (tu peux ajuster si besoin)
+W_NUM=4
+W_HOST=40
+W_KEY=22
+W_CFG=22
+
+ssha::cell_text "N°"  "${W_NUM}";  printf " " >&2
+ssha::cell_text "Hôte" "${W_HOST}"; printf " " >&2
+ssha::cell_text "Clé privée détectée" "${W_KEY}"; printf " " >&2
+ssha::cell_text "Configuration valide (Fichier providers.conf renseigné)" "${W_CFG}"
+printf "\n" >&2
+
+printf "%s\n" "--------------------------------------------------------------------------------------" >&2
+ssha::c_reset >&2
+
+for ((i=0; i<${#ids[@]}; i++)); do
+  local id label hostname username port keyname
+  IFS='|' read -r id label hostname username port keyname <<<"${lines[i]}"
+
+  local has_key=0 has_cfg=0
+  ssha::ssh_host_has_key "${id}" && has_key=1
+  ssha::ssh_test_safe_config "${id}" && has_cfg=1
+
+  # Exemple dans ta boucle:
+  # i => index, label => "PlanetHoster loicdrouet.com", has_key/has_cfg => 1/0
+
+  # i => index, label => hôte, has_key/has_cfg => 1/0
+
+  ssha::cell_text "$((i+1))" "${W_NUM}"; printf " " >&2
+  ssha::cell_text "${label}" "${W_HOST}"; printf " " >&2
+  ssha::cell_yesno "${has_key}" "${W_KEY}"; printf " " >&2
+  ssha::cell_yesno "${has_cfg}" "${W_CFG}"
+  printf "\n" >&2
+
+done
+  
+
+echo >&2
+ssha::c_blue >&2
+echo "0) Retour" >&2
+ssha::c_reset >&2
+echo >&2
 
   local choice
   choice="$(ssha::prompt_required_choice "Choix")"
   choice="${choice//[[:space:]]/}"
-
 
   if [[ "${choice}" == "0" ]]; then
     return 0
@@ -893,40 +1003,29 @@ ssha::providers_menu() {
     return $?
   fi
 
-  if [[ "${choice}" =~ ^[0-9]+$ ]] && (( choice == ${#ids[@]} + 1 )); then
-    local rc=0
-    for ((i=0; i<${#ids[@]}; i++)); do
-      ssha::provider_apply_line "${lines[i]}" || rc=1
-    done
-    return "${rc}"
-  fi
-
   ssha::log_warn "Choix invalide."
   return 1
 }
 
 
 # --- ssha::provider_apply_line
-# Applique une ligne provider: génère clé + écrit 2 Host (id + hostname).
+# Applique une ligne provider: génère clé + écrit 1 Host (alias id uniquement).
 
 ssha::provider_apply_line() {
   local line="$1"
   local id label hostname username port keyname
   IFS='|' read -r id label hostname username port keyname <<<"${line}"
 
-  # Validation (anti-casse config)
   if [[ -z "${id}" || -z "${label}" || -z "${hostname}" || -z "${username}" || -z "${port}" || -z "${keyname}" ]]; then
     ssha::log_err "Provider invalide (champ vide) dans providers.conf: ${line}"
     return 1
   fi
 
-  # Encodage fixe en mode guidé (recommandé)
   local enc="ed25519"
 
-  # Paths
   local keypath pubpath
-
-  mapfile -t _paths < <(ssha::key_paths "${enc}" "${keyname}")
+  local -a _paths
+  mapfile -t _paths < <(ssha::key_paths "${keyname}")
   keypath="${_paths[0]}"
   pubpath="${_paths[1]}"
 
@@ -936,7 +1035,7 @@ ssha::provider_apply_line() {
     ssha::log_warn "Cle existe deja, skip: ${keypath}"
   else
     ssha::log_ok "Generation cle ${label}: ${keypath}"
-    ssha::run_ssh_keygen "${enc}" "${keypath}" "${username}@${hostname}"
+    ssha::run_ssh_keygen "${enc}" "${keypath}" "${keyname}"
   fi
 
   local cfg
@@ -944,18 +1043,12 @@ ssha::provider_apply_line() {
   touch "${cfg}"
   chmod 600 "${cfg}" 2>/dev/null || true
 
-  # Remove + append TWO host blocks:
-  # - alias: Host <id>
-  # - domain: Host <hostname>
-  ssha::log_ok "Maj config pour ${label}: Host ${id} + Host ${hostname}"
+  # Un seul alias SSH: Host <id>
+  ssha::log_ok "Maj config pour ${label}: Host ${id}"
 
   ssha::remove_host_block "${cfg}" "${id}"
   ssha::append_host_block "${cfg}" "${id}" "${hostname}" "${username}" "${port}" "${keypath}"
 
-  ssha::remove_host_block "${cfg}" "${hostname}"
-  ssha::append_host_block "${cfg}" "${hostname}" "${hostname}" "${username}" "${port}" "${keypath}"
-
-  # Print public key (copy/paste)
   if [[ -f "${pubpath}" ]]; then
     local pubkey
     pubkey="$(cat "${pubpath}")"
@@ -965,6 +1058,7 @@ ssha::provider_apply_line() {
       ssha::log_warn "La clé publique est affichée. Copiez-la et collez-la chez votre hôte."
     fi
   fi
+  ssha::pause
 }
 
 
@@ -972,10 +1066,9 @@ ssha::provider_apply_line() {
 # Renvoie le chemin de la clé privée d'un provider (ed25519 par défaut).
 
 ssha::provider_keypath() {
-  local enc="$1"
-  local keyname="$2"
+  local keyname="$1"
   local -a p
-  mapfile -t p < <(ssha::key_paths "${enc}" "${keyname}")
+  mapfile -t p < <(ssha::key_paths "${keyname}")
   printf '%s\n' "${p[0]}"
 }
 
@@ -994,7 +1087,6 @@ ssha::ssh_config_ok() {
 
 ssha::ssh_real_test_git() {
   local host="$1"
-  # BatchMode: no password prompts
   ssh -o BatchMode=yes -T "${host}" >/dev/null 2>&1
 }
 
@@ -1007,16 +1099,14 @@ ssha::provider_status_line() {
   local id label hostname username port keyname
   IFS='|' read -r id label hostname username port keyname <<<"${line}"
 
-  local enc="ed25519"
   local keypath
-  keypath="$(ssha::provider_keypath "${enc}" "${keyname}")"
+  keypath="$(ssha::provider_keypath "${keyname}")"
 
   local ok_key=0 ok_id=0 ok_host=0
   [[ -f "${keypath}" ]] && ok_key=1
   ssha::ssh_config_ok "${id}" && ok_id=1
   ssha::ssh_config_ok "${hostname}" && ok_host=1
 
-  # Print: label | key | host(id) | host(domain)
   printf '%s|%s|%s|%s|%s|%s|%s\n' \
     "${id}" "${label}" "${hostname}" \
     "${ok_key}" "${ok_id}" "${ok_host}" "${keypath}"
@@ -1038,7 +1128,6 @@ ssha::providers_status_menu() {
     return 1
   fi
 
-  # Tableau status
   if ssha::colors_enabled; then ssha::c_blue >&2; fi
   printf "N\tProvider\tKey\tHost(id)\tHost(domain)\n" >&2
   printf "----------------------------------------------------------\n" >&2
@@ -1049,7 +1138,6 @@ ssha::providers_status_menu() {
     st="$(ssha::provider_status_line "${lines[i]}")"
     IFS='|' read -r id label hostname ok_key ok_id ok_host keypath <<<"${st}"
 
-    # Affichage OK/NOK (sans emoji pour rester clean)
     printf "%d\t%s\t%s\t%s\t%s\n" \
       "$((i+1))" \
       "${label}" \
@@ -1113,7 +1201,7 @@ ssha::providers_test_one() {
       else
         ssha::log_warn "NOK: ssh -T git@${hostname}"
       fi
-    ;;
+      ;;
     *) : ;;
   esac
 }
@@ -1129,8 +1217,17 @@ ssha::providers_test_all_safe() {
   for line in "${lines[@]}"; do
     IFS='|' read -r id label hostname username port keyname <<<"${line}"
     ssha::log_ok "SAFE: ${label}"
-    ssha::ssh_config_ok "${id}" && ssha::log_ok "  OK: ${id}" || ssha::log_err "  NOK: ${id}"
-    ssha::ssh_config_ok "${hostname}" && ssha::log_ok "  OK: ${hostname}" || ssha::log_err "  NOK: ${hostname}"
+    if ssha::ssh_config_ok "${id}"; then
+      ssha::log_ok "  OK: ${id}"
+    else
+      ssha::log_err "  NOK: ${id}"
+    fi
+    
+    if ssha::ssh_config_ok "${hostname}"; then
+      ssha::log_ok "  OK: ${hostname}"
+    else
+      ssha::log_err "  NOK: ${hostname}"
+    fi
   done
 }
 
@@ -1190,6 +1287,8 @@ ssha::ssh_dir_show() {
   ssha::screen_title "Dossier SSH: ${SSHA_SSH_DIR}"
 
   local dir="${SSHA_SSH_DIR}"
+  local shown_lines=6
+
   if [[ ! -d "${dir}" ]]; then
     ssha::log_warn "Le dossier n'existe pas: ${dir}"
     return 0
@@ -1197,25 +1296,55 @@ ssha::ssh_dir_show() {
 
   ssha::log_ok "Contenu (trié):"
   echo >&2
-  find "${dir}" -maxdepth 1 -type f -print 2>/dev/null | sort >&2
+
+  local files
+  files="$(find "${dir}" -maxdepth 1 -type f -print 2>/dev/null | sort || true)"
+  if [[ -n "${files}" ]]; then
+    printf "%s\n" "${files}" >&2
+    shown_lines=$((shown_lines + $(printf "%s\n" "${files}" | wc -l)))
+  fi
 
   echo >&2
+  shown_lines=$((shown_lines + 2))
+
   ssha::log_ok "Aperçu config (si présent):"
+  shown_lines=$((shown_lines + 1))
+
   if [[ -f "${dir}/config" ]]; then
     echo "----- ${dir}/config -----" >&2
-    sed -n '1,200p' "${dir}/config" >&2
+    local cfg_preview
+    cfg_preview="$(sed -n '1,200p' "${dir}/config" 2>/dev/null || true)"
+    if [[ -n "${cfg_preview}" ]]; then
+      printf "%s\n" "${cfg_preview}" >&2
+      shown_lines=$((shown_lines + $(printf "%s\n" "${cfg_preview}" | wc -l)))
+    fi
     echo "-------------------------" >&2
+    shown_lines=$((shown_lines + 2))
   else
     ssha::log_warn "Pas de fichier config."
+    shown_lines=$((shown_lines + 1))
+  # ... ton code existant
+  
   fi
+  ssha::pause
+
+  ssha::pause_if_lines_exceed "${shown_lines}"
 }
+
+ssha::pause() {
+  # shellcheck disable=SC2317
+  {
+  echo
+  read -r -p "Appuyez sur Entrée pour revenir..." _
+  }
+}
+
 
 
 # --- ssha::ssh_backup_root
 # Dossier racine des backups (~/.ssh_backup).
 
 ssha::ssh_backup_root() {
-  # Dossier racine des backups
   echo "${HOME}/.ssh_backup"
 }
 
@@ -1255,19 +1384,18 @@ ssha::ssh_backup_make() {
     *) ssha::log_err "Type backup inconnu: ${kind}"; return 1 ;;
   esac
 
-  mkdir -p "${base}"
+  ssha::maybe_run mkdir -p "${base}"
 
   local ts backup
   ts="$(date +%Y%m%d-%H%M%S 2>/dev/null || echo "backup")"
   backup="${base}/ssh-${ts}"
 
   ssha::log_ok "Sauvegarde -> ${backup}"
-  # mv pour wipe (on déplace), cp pour manual (on copie)
-  # Ici on choisit selon le kind :
+
   if [[ "${kind}" == "wipe" ]]; then
-    mv "${dir}" "${backup}"
+    ssha::maybe_run mv "${dir}" "${backup}"
   else
-    cp -a "${dir}" "${backup}"
+    ssha::maybe_run cp -a "${dir}" "${backup}"
   fi
 
   ssha::log_ok "OK."
@@ -1332,7 +1460,6 @@ ssha::ssh_backup_restore() {
   confirm="$(ssha::prompt_wipe_confirm)"
   [[ "${confirm}" == "WIPE" ]] || { ssha::log_warn "Annulé."; return 0; }
 
-  # backup du ssh actuel
   ssha::ssh_backup_make "manual"
 
   rm -rf "${SSHA_SSH_DIR}"
@@ -1347,7 +1474,6 @@ ssha::ssh_backup_restore() {
 # Option 7: déplace ~/.ssh vers backup wipe + recrée un ~/.ssh vide.
 
 ssha::ssh_dir_wipe() {
-  # Ecran danger (encadré, même longueur que le titre, rouge/inverse)
   ssha::screen_title_inline_danger "DANGER: effacement du dossier SSH"
 
   local dir="${SSHA_SSH_DIR}"
@@ -1361,35 +1487,31 @@ ssha::ssh_dir_wipe() {
   ssha::log_warn "Toutes tes clés/known_hosts/config seront perdues."
   ssha::log_warn "Une sauvegarde sera créée automatiquement (wipe)."
 
-  # Petit “pulse” visuel (optionnel, mais recommandé)
   if declare -F ssha::danger_countdown >/dev/null 2>&1; then
     ssha::danger_countdown
   fi
 
-  # Confirmation WIPE (WIPE en rouge + clignotant si possible / fallback inverse)
   local confirm
   confirm="$(ssha::prompt_wipe_confirm)"
   if [[ "${confirm}" != "WIPE" ]]; then
     ssha::log_warn "Annulé."
     ssha::history_log "WIPE ssh_dir: cancelled"
+    ssha::pause
     return 0
+    
   fi
 
-  # Emplacement backup wipe
   local base ts backup
   base="$(ssha::ssh_backup_dir_wipe)"
   ts="$(date +%Y%m%d-%H%M%S 2>/dev/null || echo "backup")"
   backup="${base}/ssh-${ts}"
 
-  # Création du dossier wipe/
   ssha::maybe_run mkdir -p "${base}"
 
-  # Déplacement du .ssh -> backup (wipe)
   ssha::log_ok "Sauvegarde (wipe) -> ${backup}"
   ssha::history_log "WIPE ssh_dir: backup -> ${backup}"
   ssha::maybe_run mv "${dir}" "${backup}"
 
-  # Recréation d'un .ssh vide
   ssha::log_ok "Recréation d'un dossier SSH vide: ${dir}"
   ssha::maybe_run mkdir -p "${dir}"
   ssha::maybe_run chmod 700 "${dir}"
@@ -1414,13 +1536,13 @@ ssha::option_keys_list() {
   ssha::log_ok "Listing keys in ${dir}"
   echo
 
-  # Show private keys (best-effort)
   find "${dir}" -maxdepth 1 -type f \
     ! -name "*.pub" ! -name "known_hosts" ! -name "config" ! -name "authorized_keys" \
     -printf "%f\n" 2>/dev/null | sort || true
 
   echo
 }
+
 # --- Tests SSH : tests de connexions
 #
 # Pourquoi le test SAFE (ssh -G) ?
@@ -1470,136 +1592,124 @@ ssha::ssh_output_indicates_success() {
   local out="${1:-}"
   [[ -n "${out}" ]] || return 1
 
-  # Messages seen after successful publickey auth:
-  # - GitHub: "You've successfully authenticated, but GitHub does not provide shell access."
-  # - GitLab: "Welcome to GitLab"
-  # - Bitbucket: "logged in as"
   if printf '%s' "${out}" | grep -qiE 'successfully authenticated|welcome to gitlab|logged in as'; then
     return 0
   fi
   return 1
 }
 
-
-
 ssha::ssh_test_real_via_host() {
-local host="${1:-}"
-[[ -n "${host}" ]] || { ssha::log_err "ssh_test_real_via_host: host manquant"; return 2; }
+  local host="${1:-}"
+  [[ -n "${host}" ]] || { ssha::log_err "ssh_test_real_via_host: host manquant"; return 2; }
 
-# Capture output because some servers (notably git providers) return non-zero even on success.
-local out rc
-out="$(
-  ssh           -o StrictHostKeyChecking=accept-new           -o BatchMode=yes           -o PreferredAuthentications=publickey           -o PasswordAuthentication=no           -o KbdInteractiveAuthentication=no           -o ConnectTimeout=8           -T "${host}" </dev/null 2>&1
-)"
-rc=$?
+  ssha::ensure_known_hosts_files
 
-if [[ "${rc}" -eq 0 ]]; then
-  return 0
-fi
+  local out rc
+  out="$(
+    ssh \
+      -o StrictHostKeyChecking=accept-new \
+      -o BatchMode=yes \
+      -o PreferredAuthentications=publickey \
+      -o PasswordAuthentication=no \
+      -o KbdInteractiveAuthentication=no \
+      -o ConnectTimeout=8 \
+      -T "${host}" </dev/null 2>&1
+  )"
+  rc=$?
 
-if ssha::ssh_output_indicates_success "${out}"; then
-  return 0
-fi
+  if [[ "${rc}" -eq 0 ]]; then
+    return 0
+  fi
 
-return 1
+  if ssha::ssh_output_indicates_success "${out}"; then
+    return 0
+  fi
 
+  return 1
 }
 
+# Test réel (publickey forcé) : cible "target" = git@github.com OU user@host
 ssha::ssh_test_real_publickey_direct() {
-local user="${1:-}"
-local hostname="${2:-}"
-local port="${3:-}"
-local identity="${4:-}"
+  local target="${1:-}"
+  local port="${2:-}"
+  local identity="${3:-}"
 
-[[ -n "${user}" && -n "${hostname}" && -n "${port}" && -n "${identity}" ]] || {
-  ssha::log_err "ssh_test_real_publickey_direct: arguments manquants (user/hostname/port/identity)"
-  return 2
-}
+  [[ -n "${target}" && -n "${port}" && -n "${identity}" ]] || {
+    ssha::log_err "ssh_test_real_publickey_direct: arguments manquants (target/port/identity)"
+    return 2
+  }
 
-local out rc
-out="$(
-  ssh           -o StrictHostKeyChecking=accept-new           -o BatchMode=yes           -o PreferredAuthentications=publickey           -o PasswordAuthentication=no           -o KbdInteractiveAuthentication=no           -o IdentitiesOnly=yes           -o ConnectTimeout=8           -i "${identity}"           -p "${port}"           -T "${user}@${hostname}" </dev/null 2>&1
-)"
-rc=$?
+  ssha::ensure_known_hosts_files
 
-if [[ "${rc}" -eq 0 ]]; then
-  return 0
-fi
+  local out rc
+  out="$(
+    ssh \
+      -o StrictHostKeyChecking=accept-new \
+      -o BatchMode=yes \
+      -o PreferredAuthentications=publickey \
+      -o PasswordAuthentication=no \
+      -o KbdInteractiveAuthentication=no \
+      -o IdentitiesOnly=yes \
+      -o ConnectTimeout=8 \
+      -i "${identity}" \
+      -p "${port}" \
+      -T "${target}" </dev/null 2>&1
+  )"
+  rc=$?
 
-if ssha::ssh_output_indicates_success "${out}"; then
-  return 0
-fi
-
-return 1
-
-}
-
-
-# --- ssha::print_auth_success_banner
-# Affiche la bannière verte "AUTHENTIFICATION SSH RÉUSSIE".
-ssha::print_auth_success_banner() {
-  # UI => STDERR
-  if declare -F ssha::colors_enabled >/dev/null 2>&1 && ssha::colors_enabled; then
-    ssha::c_green >&2
+  if [[ "${rc}" -eq 0 ]]; then
+    return 0
   fi
 
-  printf '████████████████████████████████████████████\n' >&2
-  printf '      PUBLICKEY ACCEPTÉE PAR LE SERVEUR     \n' >&2
-  printf '        AUTHENTIFICATION SSH RÉUSSIE        \n' >&2
-  printf '████████████████████████████████████████████\n' >&2
-
-  if declare -F ssha::colors_enabled >/dev/null 2>&1 && ssha::colors_enabled; then
-    ssha::c_reset >&2
+  if ssha::ssh_output_indicates_success "${out}"; then
+    return 0
   fi
+
+  return 1
 }
 
+ssha::is_git_provider_host() {
+  local h="${1:-}"
+  [[ -n "${h}" ]] || return 1
+  case "${h}" in
+    github.com|gitlab.com|bitbucket.org) return 0 ;;
+  esac
+  return 1
+}
 
-ssha::print_pubkey_copied_banner() {
-  # UI => STDERR : bannière rouge (clé copiée)
-  if declare -F ssha::colors_enabled >/dev/null 2>&1 && ssha::colors_enabled; then
-    ssha::c_red >&2
-  fi
-
-  printf '██████████████████████████████████████████████████████████████████████████
-' >&2
-  printf ' LA CLÉ PUBLIQUE A ÉTÉ COPIÉE – COLLEZ-LA MAINTENANT CHEZ VOTRE HÔTE        
-' >&2
-  printf '██████████████████████████████████████████████████████████████████████████
-' >&2
-
-  if declare -F ssha::colors_enabled >/dev/null 2>&1 && ssha::colors_enabled; then
-    ssha::c_reset >&2
+ssha::ssh_userhost_for_provider() {
+  local user="${1:-}"
+  local hostname="${2:-}"
+  if ssha::is_git_provider_host "${hostname}"; then
+    printf 'git@%s\n' "${hostname}"
+  else
+    printf '%s@%s\n' "${user}" "${hostname}"
   fi
 }
 
-
-ssha::print_pubkey_copy_failed_banner() {
-  # Bannière rouge: copie auto impossible (STDERR)
-  if declare -F ssha::colors_enabled >/dev/null 2>&1 && ssha::colors_enabled; then
-    ssha::c_red >&2
-  fi
-  printf '===================================================================\n' >&2
-  printf 'COPIE AUTOMATIQUE IMPOSSIBLE – COPIEZ LA CLÉ CI-DESSUS ET COLLEZ-LA\n' >&2
-  printf '===================================================================\n\n' >&2
-  if declare -F ssha::colors_enabled >/dev/null 2>&1 && ssha::colors_enabled; then
-    ssha::c_reset >&2
+ssha::ssh_warn_real_fail_context() {
+  local hostname="${1:-}"
+  if ssha::is_git_provider_host "${hostname}"; then
+    ssha::log_warn "Causes fréquentes (Git provider): clé non ajoutée au compte, mauvaise IdentityFile, ou clé refusée."
+    ssha::log_warn "Astuce: sur GitHub/GitLab/Bitbucket, la réussite peut afficher un message mais retourner un code != 0."
+  else
+    ssha::log_warn "Causes fréquentes: clé pas encore ajoutée côté serveur, mauvais user/port, accès SSH non activé."
   fi
 }
-
 
 ssha::ssh_test_interactive_offer() {
   local host="${1:-}"
   local pubpath="${2:-}"
   [[ -n "${host}" ]] || { ssha::log_err "ssh_test_interactive_offer: host manquant"; return 2; }
-  local _ssha__printed_success=0
 
   echo >&2
   ssha::log_ok "Test SAFE (ssh -G) pour: ${host}"
   if ! ssha::ssh_test_safe_config "${host}"; then
     ssha::log_err "NOK: config invalide pour ${host}"
-    return 1
+    return 0
   fi
-  ssha::log_ok "OK: config valide pour ${host}"
+
+  ssha::banner_config_ok_green "${host}"
 
   local resolved user hostname port identity
   resolved="$(ssha::ssh_config_resolve "${host}")"
@@ -1612,44 +1722,20 @@ ssha::ssh_test_interactive_offer() {
   printf "  port     = %s\n" "${port}" >&2
   printf "  identity = %s\n" "${identity}" >&2
 
-  # Explication (affichée une seule fois à l'entrée du sous-menu)
-  if declare -F ssha::colors_enabled >/dev/null 2>&1 && ssha::colors_enabled; then
-    ssha::c_blue >&2
-  fi
-  cat >&2 <<'EOF'
-
---- Explication des tests ---
-• Test SAFE (ssh -G) : vérifie uniquement que ton ~/.ssh/config est VALIDE pour cet alias
-  et te montre la résolution (user / hostname / port / IdentityFile). Il ne contacte pas le serveur.
-
-• Test 1 (via alias, accept-new) : tente une connexion réelle en utilisant ton alias SSH.
-  Cela applique toutes les options du bloc "Host <alias>" (IdentityFile, Port, etc.).
-
-• Test 2 (publickey forcé, accept-new) : tente une connexion réelle en forçant
-  "publickey seulement" + l'IdentityFile exact (-i) + user@hostname:port.
-  Utile pour diagnostiquer les cas où l'agent / d'autres clés / des options globales perturbent le test.
-EOF
-  if declare -F ssha::colors_enabled >/dev/null 2>&1 && ssha::colors_enabled; then
-    ssha::c_reset >&2
-  fi
-
   if [[ -n "${identity}" && ! -f "${identity}" ]]; then
     ssha::log_warn "IdentityFile introuvable: ${identity}"
     return 0
   fi
 
+  local target
+  target="$(ssha::ssh_userhost_for_provider "${user}" "${hostname}")"
+
   while true; do
     echo >&2
-    if declare -F ssha::colors_enabled >/dev/null 2>&1 && ssha::colors_enabled; then
-      ssha::c_blue >&2
-    fi
-    echo "1) Test réel (via alias, accept-new)" >&2
+    echo "1) Test réel (via config, accept-new)" >&2
     echo "2) Test réel (publickey forcé, accept-new)" >&2
     echo "3) Afficher la clé publique à coller (rappel)" >&2
     echo "0) Retour" >&2
-    if declare -F ssha::colors_enabled >/dev/null 2>&1 && ssha::colors_enabled; then
-      ssha::c_reset >&2
-    fi
     echo >&2
 
     local c
@@ -1657,46 +1743,53 @@ EOF
 
     case "${c}" in
       1)
-        ssha::log_ok "Test réel (BatchMode, accept-new) pour: ${host}"
-        if ssha::ssh_test_real_via_host "${host}"; then
-          ssha::log_ok "OK: connexion SSH acceptée par le serveur"
-          
-      ssha::print_auth_success_banner
+        if ssha::is_git_provider_host "${hostname}"; then
+          ssha::log_ok "Test réel (Git provider) pour: ${target}"
+          if ssha::ssh_test_real_via_host "${target}"; then
+            ssha::banner_conn_ok_green "${target}"
+          else
+            ssha::banner_conn_refused_red "${target}"
+            ssha::ssh_warn_real_fail_context "${hostname}"
+          fi
         else
-          ssha::log_warn "NOK: connexion refusée."
-          ssha::log_warn "Causes fréquentes: clé pas encore ajoutée côté PlanetHoster, mauvais user/port, accès SSH non activé." 
+          ssha::log_ok "Test réel (BatchMode, accept-new) pour: ${host}"
+          if ssha::ssh_test_real_via_host "${host}"; then
+            ssha::banner_conn_ok_green "${host}"
+          else
+            ssha::banner_conn_refused_red "${host}"
+            ssha::ssh_warn_real_fail_context "${hostname}"
+          fi
         fi
         ;;
       2)
-        ssha::log_ok "Test réel (publickey forcé) pour: ${user}@${hostname}:${port}"
-        if ssha::ssh_test_real_publickey_direct "${user}" "${hostname}" "${port}" "${identity}"; then
-          if declare -F ssha::colors_enabled >/dev/null 2>&1 && ssha::colors_enabled; then
-          if [[ "${_ssha__printed_success}" -eq 0 ]]; then
-          _ssha__printed_success=1
-          ssha::print_auth_success_banner
-        fi
-          else
-            printf 'PUBLICKEY ACCEPTÉE PAR LE SERVEUR - AUTHENTIFICATION SSH RÉUSSIE
-' >&2
-          fi
-
+        ssha::log_ok "Test réel (publickey forcé) pour: ${target}:${port}"
+        if ssha::ssh_test_real_publickey_direct "${target}" "${port}" "${identity}"; then
+          ssha::banner_auth_ok_green
         else
-          ssha::log_warn "NOK: authentification refusée."
-          ssha::log_warn "Si tu viens de générer la clé, colle-la dans l'interface PlanetHoster (clé autorisée) puis reteste." 
+          ssha::banner_auth_refused_red "${target}"
+          ssha::ssh_warn_real_fail_context "${hostname}"
         fi
         ;;
       3)
+        # Si pubpath non fourni → on tente de le reconstruire depuis identity
+        if [[ -z "${pubpath}" && -n "${identity}" ]]; then
+          pubpath="${identity}.pub"
+        fi
+
         if [[ -n "${pubpath}" && -f "${pubpath}" ]]; then
           ssha::print_public_key "${pubpath}"
         else
-          ssha::log_warn "Chemin de clé publique non fourni (ou fichier introuvable)."
+          ssha::log_warn "Clé publique introuvable (${pubpath})."
         fi
         ;;
       0) break ;;
       *) ssha::blink_error_red ;;
     esac
   done
+
+  return 0
 }
+
 ssha::screen_notice_red() {
   local msg="$1"
   local len line
@@ -1715,6 +1808,81 @@ ssha::screen_notice_red() {
   fi
 }
 
+# --- ssha::banner_pubkey_copied_red
+# Bannière rouge quand la clé publique est copiée (à coller chez le provider).
+
+ssha::banner_pubkey_copied_red() {
+  if ssha::colors_enabled; then ssha::c_red >&2; fi
+  printf '████████████████████████████████████████████████████████████████\n' >&2
+  printf '            CLÉ PUBLIQUE COPIÉE DANS LE PRESSE-PAPIER           \n' >&2
+  printf '              COLLEZ-LA MAINTENANT CHEZ VOTRE HÔTE              \n' >&2
+  printf '               RAFRAÎCHIR LA PAGE WEB SI BESOIN                 \n' >&2
+  printf '████████████████████████████████████████████████████████████████\n' >&2
+  if ssha::colors_enabled; then ssha::c_reset >&2; fi
+  echo >&2
+}
+
+# --- ssha::banner_pubkey_copy_failed_red
+# Bannière rouge si la copie auto est impossible.
+
+ssha::banner_pubkey_copy_failed_red() {
+  if ssha::colors_enabled; then ssha::c_red >&2; fi
+  printf '████████████████████████████████████████████████████████████████\n' >&2
+  printf '            COPIE AUTOMATIQUE IMPOSSIBLE (CLIPBOARD)            \n' >&2
+  printf '             COPIEZ LA CLÉ CI-DESSUS ET COLLEZ-LA               \n' >&2
+  printf '████████████████████████████████████████████████████████████████\n' >&2
+  if ssha::colors_enabled; then ssha::c_reset >&2; fi
+  echo >&2
+}
+
+# --- ssha::banner_auth_ok_green
+# Bannière verte quand l’authentification SSH est réussie.
+
+ssha::banner_auth_ok_green() {
+  ssha::_banner_green_block \
+    "PUBLICKEY ACCEPTÉE PAR LE SERVEUR" \
+    "AUTHENTIFICATION SSH RÉUSSIE"
+}
+
+# --- ssha::banner_config_ok_green
+# Bannière verte quand ssh -G valide la config pour un host
+
+ssha::banner_config_ok_green() {
+  local host="${1:-}"
+  ssha::_banner_green_block \
+    "CONFIG SSH VALIDE" \
+    "ssh -G OK (alias correctement resolu)" \
+    "${host}"
+}
+
+# --- ssha::banner_conn_ok_green
+# Bannière verte quand la connexion SSH est acceptée
+
+ssha::banner_conn_ok_green() {
+  local host="${1:-}"
+  ssha::_banner_green_block \
+    "CONNEXION SSH ACCEPTÉE" \
+    "Authentification reussie" \
+    "${host}"
+}
+
+# --- BANNIERES ROUGES (refus)
+
+ssha::banner_conn_refused_red() {
+  local host="${1:-}"
+  ssha::_banner_red_block \
+    "CONNEXION SSH REFUSÉE" \
+    "Le serveur a rejeté la connexion" \
+    "${host}"
+}
+
+ssha::banner_auth_refused_red() {
+  local host="${1:-}"
+  ssha::_banner_red_block \
+    "AUTHENTIFICATION REFUSÉE" \
+    "La clé n'est pas acceptée (publickey)" \
+    "${host}"
+}
 
 
 
@@ -1724,41 +1892,39 @@ ssha::screen_notice_red() {
 ssha::main() {
   ssha::detect_platform
 
-  # Allow tests to override ssh dir
   SSHA_SSH_DIR="${SSHA_SSH_DIR:-$HOME/.ssh}"
   export SSHA_SSH_DIR
 
   while true; do
     ssha::banner
     ssha::menu
-    local choice
+
+    local choice rc=0
     choice="$(ssha::prompt_required_choice "Choix")"
+
     case "${choice}" in
       1) ssha::option_create_key_and_config ;;
-      2) ssha::option_ssh_test_menu ;;
-      4) ssha::providers_menu ;;
-      5) ssha::providers_status_menu ;;
-      6) ssha::proc_show_shells ;;
-      7) ssha::ssh_dir_show ;;
-      8) ssha::ssh_dir_wipe ;;
-      9) ssha::ssh_dir_backup_manual ;;
-      10) ssha::dry_run_toggle ;;
-      11) ssha::history_show ;;
-      0) exit 0 ;;
+      2) ssha::providers_menu ;;
+      3) ssha::option_ssh_test_menu ;;
+      4) ssha::ssh_dir_show ;;
+      5) ssha::ssh_dir_backup_manual ;;
+      6) ssha::ssh_dir_wipe ;;
+      0) return 0 ;;
       *) ssha::log_warn "Choix invalide." ;;
     esac
-    echo
-    read -r -p "Appuie sur Entrée pour revenir au menu..." _
+
+    if [[ "${rc}" != "0" ]]; then
+      ssha::log_warn "Action terminée avec erreur (code ${rc}). Retour au menu."
+    fi
+
   done
 }
 
 
+
 # --- ssha::term_supports_blink
-# 
 
 ssha::term_supports_blink() {
-  # Beaucoup de terminaux mentent; on considère blink "non fiable"
-  # On retourne toujours 1 (désactivé) => on utilise le fallback inverse.
   return 1
 }
 
@@ -1767,7 +1933,6 @@ ssha::ssh_config_list_hosts() {
   cfg="$(ssha::config_path)"
   [[ -f "${cfg}" ]] || return 0
 
-  # Récupère les noms après "Host", ignore les patterns (* ?)
   awk '
     /^[[:space:]]*Host[[:space:]]+/{
       for (i=2;i<=NF;i++){
@@ -1782,14 +1947,11 @@ ssha::ssh_dir_backup_manual() {
   ssha::screen_title "Sauvegarde volontaire du dossier SSH"
   ssha::ssh_backup_make "manual"
   ssha::history_log "backup manual ssh_dir"
+  ssha::pause
 }
 
-
-
-
-
 ssha::option_ssh_test_menu() {
-  ssha::screen_title "Test de connexion SSH (hosts du config)"
+  ssha::screen_title "Test de connexion SSH"
 
   local -a hosts
   mapfile -t hosts < <(ssha::ssh_config_list_hosts)
@@ -1805,7 +1967,6 @@ ssha::option_ssh_test_menu() {
   for ((i=0; i<${#hosts[@]}; i++)); do
     printf "%d) %s\n" "$((i+1))" "${hosts[i]}" >&2
   done
-  printf "%d) %s\n" "$(( ${#hosts[@]} + 1 ))" "Tester TOUS (SAFE)" >&2
   echo "0) Retour" >&2
   ssha::c_reset >&2
   echo >&2
@@ -1820,21 +1981,175 @@ ssha::option_ssh_test_menu() {
     return $?
   fi
 
-  if (( choice == ${#hosts[@]} + 1 )); then
-    local rc=0
-    for h in "${hosts[@]}"; do
-      ssha::log_ok "SAFE: ${h}"
-      if ssha::ssh_test_safe_config "${h}"; then
-        ssha::log_ok "  OK"
-      else
-        ssha::log_err "  NOK"
-        rc=1
-      fi
-    done
-    return "${rc}"
-  fi
-
   ssha::log_warn "Choix invalide."
   return 1
 }
 
+ssha::print_auth_success_banner() {
+  if ssha::colors_enabled; then
+    ssha::c_green >&2
+  fi
+
+  printf '\n' >&2
+  printf '████████████████████████████████████████████████████████\n' >&2
+  printf '        PUBLICKEY ACCEPTÉE PAR LE SERVEUR              \n' >&2
+  printf '          AUTHENTIFICATION SSH RÉUSSIE                 \n' >&2
+  printf '████████████████████████████████████████████████████████\n\n' >&2
+
+  if ssha::colors_enabled; then
+    ssha::c_reset >&2
+  fi
+}
+
+# Retourne 0 si un IdentityFile est trouvé et existe
+ssha::ssh_host_has_key() {
+  local host="${1:-}"
+  [[ -n "${host}" ]] || return 1
+
+  local g identity
+  g="$(ssh -G "${host}" 2>/dev/null || true)"
+  identity="$(printf '%s\n' "${g}" | awk '$1=="identityfile"{print $2; exit}')"
+
+  [[ -n "${identity}" && -f "${identity}" ]]
+}
+
+# Retourne "OK" / "NOK" (texte simple)
+ssha::oui_non() {
+  if [[ "${1:-0}" == "1" ]]; then
+    printf 'oui'
+  else
+    printf 'non'
+  fi
+}
+
+# --- ssha::_pad_visible
+# Pad à droite sur largeur "width" en comptant uniquement les caractères visibles (sans couleurs)
+ssha::_pad_visible() {
+  local s="$1"
+  local width="$2"
+  local len=${#s}
+  local pad=0
+  (( width > len )) && pad=$((width - len))
+  printf '%s%*s' "${s}" "${pad}" ''
+}
+
+# --- ssha::cell_yesno
+# Retourne une cellule "✔ oui" / "✖ non" colorée, MAIS alignée sur une largeur fixe.
+# Usage: ssha::cell_yesno 1 22  (true, width)
+
+ssha::cell_yesno() {
+  local yes="${1:-0}"
+  local width="${2:-22}"
+
+  local raw padded
+
+  if [[ "${yes}" == "1" ]]; then
+    raw="[OK]"
+  else
+    raw="[NO]"
+  fi
+
+  padded="$(ssha::_pad_visible "${raw}" "${width}")"
+
+  if ssha::colors_enabled; then
+    if [[ "${yes}" == "1" ]]; then
+      ssha::c_green >&2
+    else
+      ssha::c_red >&2
+    fi
+  fi
+
+  printf '%s' "${padded}" >&2
+
+  if ssha::colors_enabled; then
+    ssha::c_reset >&2
+  fi
+}
+
+ssha::cell_text() {
+  local text="${1:-}"
+  local width="${2:-22}"
+  printf '%s' "$(ssha::_pad_visible "${text}" "${width}")" >&2
+}
+
+# --- ssha::ssh_config_find_duplicate_hosts
+# Liste les alias Host présents plusieurs fois dans ~/.ssh/config
+
+ssha::ssh_config_find_duplicate_hosts() {
+  local cfg
+  cfg="$(ssha::config_path)"
+  [[ -f "${cfg}" ]] || return 0
+
+  awk '
+    /^[[:space:]]*Host[[:space:]]+/{
+      for (i=2; i<=NF; i++) {
+        if ($i !~ /[*?]/) print $i
+      }
+    }
+  ' "${cfg}" | sort | uniq -d
+}
+
+# --- ssha::ssh_config_show_duplicate_hosts
+# Affiche les alias Host en doublon
+
+ssha::ssh_config_show_duplicate_hosts() {
+  ssha::screen_title "Doublons dans ~/.ssh/config"
+
+  local -a dups
+  mapfile -t dups < <(ssha::ssh_config_find_duplicate_hosts)
+
+  if [[ "${#dups[@]}" -eq 0 ]]; then
+    ssha::log_ok "Aucun doublon détecté."
+    return 0
+  fi
+
+  ssha::log_warn "Alias en doublon détectés :"
+  local h
+  for h in "${dups[@]}"; do
+    printf '  - %s\n' "${h}" >&2
+  done
+}
+
+# --- ssha::pause
+# Pause interactive pour lire un écran avant retour menu.
+
+ssha::pause() {
+# shellcheck disable=SC2317
+  echo
+  # shellcheck disable=SC2317
+  read -r -p "Appuyez sur Entrée pour continuer..." _
+}
+
+# --- ssha::term_rows
+# Retourne le nombre de lignes du terminal (fallback: 24)
+
+ssha::term_rows() {
+  local rows
+  rows="$(tput lines 2>/dev/null || true)"
+  [[ "${rows}" =~ ^[0-9]+$ ]] || rows=24
+  printf '%s\n' "${rows}"
+}
+
+# --- ssha::pause
+# Pause simple
+
+ssha::pause() {
+  echo >&2
+  read -r -p "Entrée pour continuer..." _ >&2
+}
+
+# --- ssha::pause_if_lines_exceed
+# Pause seulement si le nombre de lignes affichées dépasse la hauteur utile du terminal
+
+ssha::pause_if_lines_exceed() {
+  local shown_lines="${1:-0}"
+  local rows margin threshold
+
+  rows="$(ssha::term_rows)"
+  margin=4
+  threshold=$((rows - margin))
+
+  if (( shown_lines >= threshold )); then
+    ssha::pause
+  fi
+}

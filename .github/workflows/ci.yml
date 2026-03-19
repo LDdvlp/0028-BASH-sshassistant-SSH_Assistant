@@ -5,20 +5,20 @@ on:
   pull_request:
 
 jobs:
-  test:
+  bash-ci:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Install bats + shellcheck
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y bats shellcheck
+          sudo apt-get install -y shellcheck bats
 
-      - name: ShellCheck
-        run: |
-          shellcheck -x bin/ssha lib/*.sh
+      - name: Run lint
+        run: make lint
 
-      - name: BATS tests
-        run: |
-          bats -r tests
+      - name: Run tests
+        run: make test
