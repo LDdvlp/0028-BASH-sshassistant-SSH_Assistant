@@ -65,6 +65,7 @@ make ci
 
 ## ⚙️ Structure du projet
 
+```
 .
 ├── bin/
 │   └── ssha
@@ -75,6 +76,7 @@ make ci
 ├── assets/
 ├── Makefile
 └── README.md
+```
 
 ---
 
