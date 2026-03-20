@@ -1,27 +1,31 @@
-name: Release
+name: CI
 
 on:
   push:
-    tags:
-      - "v*"
+    branches: [ main ]
+  pull_request:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  build:
+  ci:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build
+      - name: Install dependencies
         run: |
-          chmod +x scripts/build.sh
-          ./scripts/build.sh ${GITHUB_REF_NAME}
+          sudo apt-get update
+          sudo apt-get install -y shellcheck bats
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*.zip
+      - name: Syntax check
+        run: make syntax
+
+      - name: Lint
+        run: make lint
+
+      - name: Tests
+        run: make test
