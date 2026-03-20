@@ -2,3 +2,4 @@
 tests/fixtures/ssh-add
 tests/fixtures/ssh-agent
 tests/fixtures/ssh-keygen
+dist/
