@@ -1326,18 +1326,11 @@ ssha::ssh_dir_show() {
   # ... ton code existant
   
   fi
-  ssha::pause
-
+  
   ssha::pause_if_lines_exceed "${shown_lines}"
 }
 
-ssha::pause() {
-  # shellcheck disable=SC2317
-  {
-  echo
-  read -r -p "Appuyez sur Entrée pour revenir..." _
-  }
-}
+
 
 
 
@@ -2113,12 +2106,7 @@ ssha::ssh_config_show_duplicate_hosts() {
 # --- ssha::pause
 # Pause interactive pour lire un écran avant retour menu.
 
-ssha::pause() {
-# shellcheck disable=SC2317
-  echo
-  # shellcheck disable=SC2317
-  read -r -p "Appuyez sur Entrée pour continuer..." _
-}
+
 
 # --- ssha::term_rows
 # Retourne le nombre de lignes du terminal (fallback: 24)
