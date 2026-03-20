@@ -42,9 +42,23 @@ ROOT_DIR="$INSTALL_LIB"
 
 # --- CLI arguments ---
 case "\${1:-}" in
+  "")
+    ;;
   --version|-v)
     echo "SSH Assistant v\${SSHA_VERSION}"
     exit 0
+    ;;
+  doctor)
+    ;;
+  -*)
+    echo "❌ Unknown option: \${1}" >&2
+    echo "Usage: ssha [--version|-v]" >&2
+    exit 1
+    ;;
+  *)
+    echo "❌ Unknown command: \${1}" >&2
+    echo "Usage: ssha [--version|-v]" >&2
+    exit 1
     ;;
 esac
 
