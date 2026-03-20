@@ -27,21 +27,32 @@ rm -rf "$INSTALL_LIB"
 # Install
 mkdir -p "$INSTALL_LIB"
 cp -r lib "$INSTALL_LIB/"
-cp bin/ssha "$INSTALL_LIB/"
 cp -r assets "$INSTALL_LIB/"
+cp bin/ssha "$INSTALL_LIB/"
 
 # Wrapper
 WRAPPER="$INSTALL_BIN/ssha"
-
 mkdir -p "$INSTALL_BIN"
 
 cat > "$WRAPPER" << EOF
 #!/usr/bin/env bash
+
+SSHA_VERSION="1.0.0"
 ROOT_DIR="$INSTALL_LIB"
 
+# --- CLI arguments ---
+case "\${1:-}" in
+  --version|-v)
+    echo "SSH Assistant v\${SSHA_VERSION}"
+    exit 0
+    ;;
+esac
+
+# --- Load ---
 source "\$ROOT_DIR/lib/ssha_colors.sh"
 source "\$ROOT_DIR/lib/ssha_core.sh"
 
+# --- Run ---
 ssha::main "\$@"
 EOF
 
