@@ -2,41 +2,57 @@
 
 set -e
 
-BIN_DIR="/usr/local/bin"
-LIB_DIR="/usr/local/lib/ssha"
-
 echo "🔧 Installing SSH Assistant..."
 
-if [[ "$EUID" -ne 0 ]]; then
-  echo "⚠️  Please run as root (sudo ./install.sh)"
+# Détection OS
+if [[ "$OSTYPE" == "linux-gnu"* || "$OSTYPE" == "darwin"* ]]; then
+  INSTALL_BIN="/usr/local/bin"
+  INSTALL_LIB="/usr/local/lib/ssha"
+  NEED_SUDO=true
+else
+  INSTALL_BIN="$HOME/.local/bin"
+  INSTALL_LIB="$HOME/.local/lib/ssha"
+  NEED_SUDO=false
+fi
+
+# sudo si nécessaire
+if [[ "$NEED_SUDO" == true && "$EUID" -ne 0 ]]; then
+  echo "⚠️  Please run with sudo"
   exit 1
 fi
 
-# Clean previous install
-rm -rf "$LIB_DIR"
+# Clean
+rm -rf "$INSTALL_LIB"
 
-# Install files
-mkdir -p "$LIB_DIR"
-cp -r lib "$LIB_DIR/"
-cp bin/ssha "$LIB_DIR/"
+# Install
+mkdir -p "$INSTALL_LIB"
+cp -r lib "$INSTALL_LIB/"
+cp bin/ssha "$INSTALL_LIB/"
+cp -r assets "$INSTALL_LIB/"
 
-# Create wrapper
-cat > "$BIN_DIR/ssha" << 'EOF'
+# Wrapper
+WRAPPER="$INSTALL_BIN/ssha"
+
+mkdir -p "$INSTALL_BIN"
+
+cat > "$WRAPPER" << EOF
 #!/usr/bin/env bash
+ROOT_DIR="$INSTALL_LIB"
 
-ROOT_DIR="/usr/local/lib/ssha"
+source "\$ROOT_DIR/lib/ssha_colors.sh"
+source "\$ROOT_DIR/lib/ssha_core.sh"
 
-# shellcheck disable=SC1091
-source "$ROOT_DIR/lib/ssha_colors.sh"
-
-# shellcheck disable=SC1091
-source "$ROOT_DIR/lib/ssha_core.sh"
-
-ssha::main "$@"
+ssha::main "\$@"
 EOF
 
-chmod +x "$BIN_DIR/ssha"
+chmod +x "$WRAPPER"
 
-echo "✅ Installed to $BIN_DIR/ssha"
-echo "📁 Files in $LIB_DIR"
+echo "✅ Installed to $WRAPPER"
+
+# PATH hint
+if [[ ":$PATH:" != *":$INSTALL_BIN:"* ]]; then
+  echo "⚠️  Add this to your PATH:"
+  echo "export PATH=\"$INSTALL_BIN:\$PATH\""
+fi
+
 echo "🚀 You can now run: ssha"
