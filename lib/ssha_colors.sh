@@ -11,7 +11,6 @@ set -euo pipefail
 # -----------------------------------------------------------------------------
 
 ssha::colors_enabled() {
-  [[ -t 1 ]] || return 1
   [[ -z "${NO_COLOR:-}" ]] || return 1
   [[ "${SSHA_NO_COLOR:-0}" != "1" ]] || return 1
   return 0
@@ -21,41 +20,12 @@ ssha::colors_enabled() {
 # Couleurs de base (ANSI)
 # -----------------------------------------------------------------------------
 
-ssha::c_reset() {
-  if ssha::colors_enabled; then
-    printf '\033[0m'
-  fi
-}
-
-ssha::c_orange() {
-  if ssha::colors_enabled; then
-    printf '\033[38;5;208m'
-  fi
-}
-
-ssha::c_green() {
-  if ssha::colors_enabled; then
-    printf '\033[38;5;46m'
-  fi
-}
-
-ssha::c_blue() {
-  if ssha::colors_enabled; then
-    printf '\033[38;5;39m'
-  fi
-}
-
-ssha::c_yellow() {
-  if ssha::colors_enabled; then
-    printf '\033[38;5;226m'
-  fi
-}
-
-ssha::c_red() {
-  if ssha::colors_enabled; then
-    printf '\033[38;5;196m'
-  fi
-}
+ssha::c_reset() { printf '\033[0m'; }
+ssha::c_orange() { printf '\033[38;5;208m'; }
+ssha::c_green() { printf '\033[38;5;46m'; }
+ssha::c_blue() { printf '\033[38;5;39m'; }
+ssha::c_yellow() { printf '\033[38;5;226m'; }
+ssha::c_red() { printf '\033[38;5;196m'; }
 
 # -----------------------------------------------------------------------------
 # Helpers affichage
@@ -103,6 +73,11 @@ ssha::println_blue() {
 # -----------------------------------------------------------------------------
 # Tags visuels
 # -----------------------------------------------------------------------------
+ssha::tag_info() {
+  ssha::c_blue
+  printf '[INFO]'
+  ssha::c_reset
+}
 
 ssha::tag_ok() {
   ssha::c_green
@@ -118,7 +93,7 @@ ssha::tag_warn() {
 
 ssha::tag_err() {
   ssha::c_red
-  printf '[ERROR]'
+  printf '[KO]'
   ssha::c_reset
 }
 
@@ -127,16 +102,25 @@ ssha::tag_err() {
 # -----------------------------------------------------------------------------
 
 ssha::log_ok() {
-  ssha::tag_ok
-  printf ' %s\n' "$*"
+  ssha::c_green
+  printf '[OK] %s\n' "$*" >&2
+  ssha::c_reset
 }
 
 ssha::log_warn() {
-  ssha::tag_warn
-  printf ' %s\n' "$*"
+  ssha::c_yellow
+  printf '[WARN] %s\n' "$*" >&2
+  ssha::c_reset
 }
 
 ssha::log_err() {
-  ssha::tag_err
-  printf ' %s\n' "$*"
+  ssha::c_red
+  printf '[KO] %s\n' "$*" >&2
+  ssha::c_reset
+}
+
+ssha::log_info() {
+  ssha::c_blue
+  printf '[INFO] %s\n' "$*" >&2
+  ssha::c_reset
 }

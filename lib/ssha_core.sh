@@ -2141,3 +2141,49 @@ ssha::pause_if_lines_exceed() {
     ssha::pause
   fi
 }
+
+ssha::doctor() {
+  ssha::screen_title "Diagnostic SSH (doctor)"
+
+  local dir="${SSHA_SSH_DIR:-$HOME/.ssh}"
+
+  echo "🔍 Vérifications..." >&2
+  echo >&2
+
+  if command -v ssh >/dev/null 2>&1; then
+    ssha::log_ok "ssh installé"
+  else
+    ssha::log_err "ssh introuvable"
+  fi
+
+  if [[ -d "${dir}" ]]; then
+    ssha::log_ok "dossier ~/.ssh présent"
+  else
+    ssha::log_err "dossier ~/.ssh absent"
+  fi
+
+  if [[ -d "${dir}" ]]; then
+    perms="$(stat -c "%a" "${dir}" 2>/dev/null || echo "unknown")"
+    ssha::log_info "permissions ~/.ssh : ${perms}"
+  fi
+
+  if [[ -f "${dir}/config" ]]; then
+    ssha::log_ok "fichier config présent"
+  else
+    ssha::log_warn "pas de config SSH"
+  fi
+
+  local keys
+  keys="$(find "${dir}" -maxdepth 1 -type f ! -name "*.pub" ! -name "known_hosts" ! -name "config" 2>/dev/null || true)"
+
+  if [[ -n "${keys}" ]]; then
+    ssha::log_ok "clés privées détectées"
+  else
+    ssha::log_warn "aucune clé privée trouvée"
+  fi
+
+  echo >&2
+  ssha::log_ok "Diagnostic terminé"
+
+  ssha::pause
+}

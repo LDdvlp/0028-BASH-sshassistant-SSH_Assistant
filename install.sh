@@ -43,21 +43,28 @@ ROOT_DIR="$INSTALL_LIB"
 # --- CLI arguments ---
 case "\${1:-}" in
   "")
+    # mode interactif
     ;;
   --version|-v)
     echo "SSH Assistant v\${SSHA_VERSION}"
     exit 0
     ;;
   doctor)
+    source "\$ROOT_DIR/lib/ssha_colors.sh"
+    source "\$ROOT_DIR/lib/ssha_core.sh"
+    ssha::detect_platform
+    SSHA_SSH_DIR="\${SSHA_SSH_DIR:-\$HOME/.ssh}"
+    ssha::doctor
+    exit 0
     ;;
   -*)
     echo "❌ Unknown option: \${1}" >&2
-    echo "Usage: ssha [--version|-v]" >&2
+    echo "Usage: ssha [--version|-v|doctor]" >&2
     exit 1
     ;;
   *)
     echo "❌ Unknown command: \${1}" >&2
-    echo "Usage: ssha [--version|-v]" >&2
+    echo "Usage: ssha [--version|-v|doctor]" >&2
     exit 1
     ;;
 esac
