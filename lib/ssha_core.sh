@@ -215,6 +215,8 @@ ssha::menu() {
   echo "* DIAGNOSTIC *" >&2
   echo "--------------" >&2
   echo "7) Doctor " >&2
+  echo "8) List hosts" >&2
+  echo "9) Test host" >&2
   echo "--------------" >&2
   echo "0) Quit" >&2
 
@@ -1913,6 +1915,11 @@ ssha::main() {
       5) ssha::ssh_dir_backup_manual ;;
       6) ssha::ssh_dir_wipe ;;
       7) ssha::doctor ;;
+      8) ssha::list_hosts ;;
+      9)
+        read -rp "Host: " host
+        ssha::test_host "$host"
+        ;;
       0) return 0 ;;
       *) ssha::log_warn "Choix invalide." ;;
     esac
@@ -2195,6 +2202,69 @@ ssha::doctor() {
 
   echo >&2
   ssha::log_ok "Diagnostic terminé"
+
+  ssha::pause
+}
+
+ssha::help() {
+  ssha::screen_title "SSH Assistant"
+
+  ssha::println_blue "Usage:"
+  echo "  ssha                Launch interactive mode" >&2
+  echo "  ssha doctor         Run diagnostics" >&2
+  echo "  ssha --version      Show version" >&2
+  echo "  ssha help           Show this help" >&2
+  echo >&2
+
+  ssha::println_blue "Commands:"
+  echo "  doctor              Check SSH configuration" >&2
+  echo >&2
+
+  ssha::println_blue "Examples:"
+  echo "  ssha" >&2
+  echo "  ssha doctor" >&2
+  echo >&2
+
+  ssha::println_blue "Tips:"
+  echo "  - Use 'ssha' for interactive management" >&2
+  echo "  - Use 'ssha doctor' to debug issues" >&2
+
+  ssha::pause
+}
+
+ssha::list_hosts() {
+  local config="${SSHA_SSH_CONFIG:-$HOME/.ssh/config}"
+
+  if [[ ! -f "$config" ]]; then
+    ssha::log_warn "No SSH config found"
+    return
+  fi
+
+  ssha::screen_title "SSH Hosts"
+
+  grep -E "^Host " "$config" | awk '{print $2}' | while read -r host; do
+    ssha::log_info "$host"
+  done
+
+  ssha::pause
+}
+
+ssha::test_host() {
+  local host="$1"
+
+  if [[ -z "$host" ]]; then
+    ssha::log_err "Usage: ssha test <host>"
+    return
+  fi
+
+  ssha::screen_title "Test SSH connection"
+  ssha::log_info "Testing connection to $host..."
+
+  if ssh -G "$host" >/dev/null 2>&1; then
+    ssha::log_ok "SSH config valid (host reachable)"
+  else
+    ssha::log_err "SSH configuration error"
+  fi
 
   ssha::pause
 }

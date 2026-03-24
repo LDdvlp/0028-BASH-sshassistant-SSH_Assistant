@@ -68,6 +68,24 @@ case "\${1:-}" in
     ssha::doctor
     exit 0
     ;;
+  help|-h|--help)
+    source "\$ROOT_DIR/lib/ssha_colors.sh"
+    source "\$ROOT_DIR/lib/ssha_core.sh"
+    ssha::help
+    exit 0
+    ;;
+  list)
+    source "\$ROOT_DIR/lib/ssha_colors.sh"
+    source "\$ROOT_DIR/lib/ssha_core.sh"
+    ssha::list_hosts
+    exit 0
+    ;;
+  test)
+    source "\$ROOT_DIR/lib/ssha_colors.sh"
+    source "\$ROOT_DIR/lib/ssha_core.sh"
+    ssha::test_host "\${2:-}"
+    exit 0
+    ;;
   -*)
     echo "❌ Unknown option: \${1}" >&2
     exit 1
