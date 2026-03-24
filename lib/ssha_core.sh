@@ -167,8 +167,14 @@ ssha::banner() {
   if [[ -f "${root_dir}/assets/banner.txt" ]]; then
     # Banner in orange (option 3)
     ssha::print_orange_file "${root_dir}/assets/banner.txt"
+    if [[ -n "${SSHA_VERSION:-}" ]]; then
+      ssha::println_blue "   v${SSHA_VERSION}"
+    fi
   else
     echo "SSH Assistant"
+    if [[ -n "${SSHA_VERSION:-}" ]]; then
+      ssha::println_blue "v${SSHA_VERSION}"
+    fi
   fi
 
   echo
@@ -205,7 +211,11 @@ ssha::menu() {
   echo "4) Afficher le dossier ~/.ssh" >&2
   echo "5) Sauvegarder le dossier ~/.ssh (volontaire)" >&2
   echo "6) Effacer le dossier ~/.ssh (DANGEREUX)" >&2
-  echo "-------" >&2
+  echo "--------------" >&2
+  echo "* DIAGNOSTIC *" >&2
+  echo "--------------" >&2
+  echo "7) Doctor " >&2
+  echo "--------------" >&2
   echo "0) Quit" >&2
 
   ssha::c_reset >&2
@@ -1902,6 +1912,7 @@ ssha::main() {
       4) ssha::ssh_dir_show ;;
       5) ssha::ssh_dir_backup_manual ;;
       6) ssha::ssh_dir_wipe ;;
+      7) ssha::doctor ;;
       0) return 0 ;;
       *) ssha::log_warn "Choix invalide." ;;
     esac

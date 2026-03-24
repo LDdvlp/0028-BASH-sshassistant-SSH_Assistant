@@ -2,6 +2,8 @@
 
 set -e
 
+export SSHA_VERSION="1.0.1"
+
 echo "🔧 Installing SSH Assistant..."
 
 # Détection OS
@@ -25,25 +27,36 @@ fi
 rm -rf "$INSTALL_LIB"
 
 # Install
+# Install
 mkdir -p "$INSTALL_LIB"
+
 cp -r lib "$INSTALL_LIB/"
 cp -r assets "$INSTALL_LIB/"
 cp bin/ssha "$INSTALL_LIB/"
+if [[ -f "VERSION" ]]; then
+  cp VERSION "$INSTALL_LIB/"
+fi
 
-# Wrapper
+# Wrapper - Heredoc
 WRAPPER="$INSTALL_BIN/ssha"
 mkdir -p "$INSTALL_BIN"
 
 cat > "$WRAPPER" << EOF
 #!/usr/bin/env bash
 
-SSHA_VERSION="1.0.0"
 ROOT_DIR="$INSTALL_LIB"
+
+VERSION_FILE="\$ROOT_DIR/VERSION"
+
+if [[ -f "\$VERSION_FILE" ]]; then
+  SSHA_VERSION="\$(cat "\$VERSION_FILE")"
+else
+  SSHA_VERSION="dev"
+fi
 
 # --- CLI arguments ---
 case "\${1:-}" in
   "")
-    # mode interactif
     ;;
   --version|-v)
     echo "SSH Assistant v\${SSHA_VERSION}"
@@ -52,19 +65,15 @@ case "\${1:-}" in
   doctor)
     source "\$ROOT_DIR/lib/ssha_colors.sh"
     source "\$ROOT_DIR/lib/ssha_core.sh"
-    ssha::detect_platform
-    SSHA_SSH_DIR="\${SSHA_SSH_DIR:-\$HOME/.ssh}"
     ssha::doctor
     exit 0
     ;;
   -*)
     echo "❌ Unknown option: \${1}" >&2
-    echo "Usage: ssha [--version|-v|doctor]" >&2
     exit 1
     ;;
   *)
     echo "❌ Unknown command: \${1}" >&2
-    echo "Usage: ssha [--version|-v|doctor]" >&2
     exit 1
     ;;
 esac
