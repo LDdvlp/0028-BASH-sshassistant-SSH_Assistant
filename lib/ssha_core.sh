@@ -216,7 +216,6 @@ ssha::menu() {
   echo "--------------" >&2
   echo "7) Doctor " >&2
   echo "8) List hosts" >&2
-  echo "9) Test host" >&2
   echo "--------------" >&2
   echo "0) Quit" >&2
 
@@ -663,7 +662,8 @@ ssha::run_ssh_keygen() {
   local enc="$1"
   local keypath="$2"
   local comment="$3"
-
+  chmod 600 "${keypath}" 2>/dev/null || true
+  chmod 644 "${keypath}.pub" 2>/dev/null || true
   case "${enc}" in
     ed25519)
       ssh-keygen -t ed25519 -a 64 -f "${keypath}" -C "${comment}" -N ""
@@ -948,8 +948,6 @@ ssha::providers_menu() {
     ssha::log_err "Aucun provider dans assets/providers.conf"
     return 1
   fi
-
-local count="${#ids[@]}"
 
 echo >&2
 ssha::c_blue >&2
@@ -1904,7 +1902,7 @@ ssha::main() {
     ssha::banner
     ssha::menu
 
-    local choice rc=0
+    local choice
     choice="$(ssha::prompt_required_choice "Choix")"
 
     case "${choice}" in
@@ -1916,18 +1914,9 @@ ssha::main() {
       6) ssha::ssh_dir_wipe ;;
       7) ssha::doctor ;;
       8) ssha::list_hosts ;;
-      9)
-        read -rp "Host: " host
-        ssha::test_host "$host"
-        ;;
       0) return 0 ;;
       *) ssha::log_warn "Choix invalide." ;;
     esac
-
-    if [[ "${rc}" != "0" ]]; then
-      ssha::log_warn "Action terminée avec erreur (code ${rc}). Retour au menu."
-    fi
-
   done
 }
 
@@ -2121,9 +2110,6 @@ ssha::ssh_config_show_duplicate_hosts() {
   done
 }
 
-# --- ssha::pause
-# Pause interactive pour lire un écran avant retour menu.
-
 
 
 # --- ssha::term_rows
@@ -2245,26 +2231,6 @@ ssha::list_hosts() {
   grep -E "^Host " "$config" | awk '{print $2}' | while read -r host; do
     ssha::log_info "$host"
   done
-
-  ssha::pause
-}
-
-ssha::test_host() {
-  local host="$1"
-
-  if [[ -z "$host" ]]; then
-    ssha::log_err "Usage: ssha test <host>"
-    return
-  fi
-
-  ssha::screen_title "Test SSH connection"
-  ssha::log_info "Testing connection to $host..."
-
-  if ssh -G "$host" >/dev/null 2>&1; then
-    ssha::log_ok "SSH config valid (host reachable)"
-  else
-    ssha::log_err "SSH configuration error"
-  fi
 
   ssha::pause
 }

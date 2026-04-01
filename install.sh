@@ -83,16 +83,14 @@ case "\${1:-}" in
   test)
     source "\$ROOT_DIR/lib/ssha_colors.sh"
     source "\$ROOT_DIR/lib/ssha_core.sh"
-    ssha::test_host "\${2:-}"
+  
+    if [[ "\${2:-}" == "--full" ]]; then
+      ssha::test_host_full "\${3:-}"
+    else
+      ssha::test_host "\${2:-}"
+    fi
+  
     exit 0
-    ;;
-  -*)
-    echo "❌ Unknown option: \${1}" >&2
-    exit 1
-    ;;
-  *)
-    echo "❌ Unknown command: \${1}" >&2
-    exit 1
     ;;
 esac
 
